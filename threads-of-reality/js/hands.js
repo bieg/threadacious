@@ -18,8 +18,10 @@ let lastResult = null;
 
 const handStates = [{}, {}];
 
-export let onGesture = null;
+let onGesture = null;
 export let latestResult = null;
+
+export function setOnGesture(fn) { onGesture = fn; }
 
 export async function initHands() {
   const vision = await FilesetResolver.forVisionTasks(

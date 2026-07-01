@@ -1,5 +1,5 @@
 import { initScene, render, getScene } from './scene.js';
-import { initHands, detectHands, latestResult, onGesture as _og, getHandGrowingState } from './hands.js';
+import { initHands, detectHands, latestResult, setOnGesture, getHandGrowingState } from './hands.js';
 import * as hands from './hands.js';
 import { initStarfield, updateStarfield, crushImpulse } from './starfield.js';
 import { createThread, updateThreads, activeThreads, crushThreads } from './threads.js';
@@ -48,7 +48,7 @@ async function _start() {
   initSolly(scene);
   initHud();
 
-  hands.onGesture = _handleGesture;
+  setOnGesture(_handleGesture);
 
   startOverlay.style.display = 'none';
   started = true;
