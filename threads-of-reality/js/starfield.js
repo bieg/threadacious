@@ -99,6 +99,21 @@ export function updateStarfield(time, activeThreads) {
   geometry.attributes.position.needsUpdate = true;
 }
 
+export function rotateImpulse(originWorld, direction = 1) {
+  for (let i = 0; i < COUNT; i++) {
+    const i3 = i * 3;
+    const dx = positions[i3] - originWorld.x;
+    const dy = positions[i3 + 1] - originWorld.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 4.5 && dist > 0.05) {
+      const strength = 0.05 / Math.max(dist, 0.3);
+      // tangential = perpendicular to radial
+      velocities[i3]     += (-dy / dist) * strength * direction;
+      velocities[i3 + 1] += ( dx / dist) * strength * direction;
+    }
+  }
+}
+
 export function crushImpulse(originWorld) {
   for (let i = 0; i < COUNT; i++) {
     const i3 = i * 3;

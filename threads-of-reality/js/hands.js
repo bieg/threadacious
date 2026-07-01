@@ -11,10 +11,12 @@ const FIST_RELEASE = 1.2;
 const FRAMES_REQUIRED = 5;
 const COOLDOWN_MS = 400;
 const ALPHA = 0.3;
+const ROTATE_THRESHOLD = 1.1;   // ~63° of wrist rotation
+const ROTATE_WINDOW_MS = 600;
+const ROTATE_COOLDOWN_MS = 800;
 
 let handLandmarker = null;
 let lastVideoTime = -1;
-let lastResult = null;
 
 const handStates = [{}, {}];
 
@@ -48,22 +50,26 @@ function _initHandState() {
     seenBefore: false,
     fingers: FINGERS.map(() => ({ state: 'idle', frames: 0, lastFire: 0 })),
     fist: { state: 'idle', frames: 0, lastFire: 0 },
+    rollHistory: [],
+    rotateGesture: { lastFire: 0 },
   };
 }
 
 export function detectHands(videoEl) {
   if (!handLandmarker || videoEl.currentTime === lastVideoTime) return;
   lastVideoTime = videoEl.currentTime;
-  lastResult = handLandmarker.detectForVideo(videoEl, performance.now());
-  latestResult = lastResult;
+  const result = handLandmarker.detectForVideo(videoEl, performance.now());
+  latestResult = result;
 
   for (let hi = 0; hi < 2; hi++) {
-    const lms = lastResult.landmarks[hi];
+    const lms = result.landmarks[hi];
     if (!lms) {
       handStates[hi] = _initHandState();
       continue;
     }
-    const hs = handStates[hi] || _initHandState();
+    const hs = handStates[hi] && handStates[hi].seenBefore !== undefined
+      ? handStates[hi]
+      : _initHandState();
     handStates[hi] = hs;
 
     if (!hs.seenBefore) {
@@ -104,6 +110,37 @@ export function detectHands(videoEl) {
       const palm = mpToWorld(sm[0].x, sm[0].y);
       onGesture({ type: 'crush', handIndex: hi, originPoint: palm, targetPoint: palm });
     });
+
+    _updateWristRotation(hs, sm, hi);
+  }
+}
+
+function _updateWristRotation(hs, sm, hi) {
+  const now = performance.now();
+  if (now - hs.rotateGesture.lastFire < ROTATE_COOLDOWN_MS) return;
+
+  const roll = Math.atan2(sm[17].y - sm[5].y, sm[17].x - sm[5].x);
+  hs.rollHistory.push({ roll, time: now });
+  while (hs.rollHistory.length > 0 && now - hs.rollHistory[0].time > ROTATE_WINDOW_MS) {
+    hs.rollHistory.shift();
+  }
+  if (hs.rollHistory.length < 6) return;
+
+  let totalRot = 0;
+  for (let i = 1; i < hs.rollHistory.length; i++) {
+    let diff = hs.rollHistory[i].roll - hs.rollHistory[i - 1].roll;
+    while (diff >  Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    totalRot += diff;
+  }
+
+  if (Math.abs(totalRot) > ROTATE_THRESHOLD) {
+    hs.rotateGesture.lastFire = now;
+    hs.rollHistory = [];
+    if (onGesture) {
+      const palm = mpToWorld(sm[0].x, sm[0].y);
+      onGesture({ type: 'rotate', handIndex: hi, originPoint: palm, targetPoint: palm, direction: Math.sign(totalRot) });
+    }
   }
 }
 
@@ -123,7 +160,6 @@ function _updateFingerState(st, ratio, armT, releaseT, fire) {
         fire();
       }
     }
-    if (st.state === 'armed') { /* hold */ }
   } else if (ratio < releaseT) {
     if (st.state === 'armed' || st.state === 'growing') {
       st.state = 'idle';
@@ -161,4 +197,22 @@ export function getHandGrowingState(handIndex) {
   }
   if (hs.fist && hs.fist.state === 'growing') return 'crush';
   return null;
+}
+
+export function getHandInfo(handIndex) {
+  const hs = handStates[handIndex];
+  const present = !!(hs && hs.seenBefore && latestResult && latestResult.landmarks[handIndex]);
+  if (!present) return { present: false };
+  const sm = hs.smoothed;
+  const ref = Math.max(_dist(sm[0], sm[9]), 0.01);
+  return {
+    present: true,
+    ratios: TIPS.map(tip => _dist(sm[4], sm[tip]) / ref),
+    armThresholds: ARM_THRESHOLDS,
+    releaseThresholds: RELEASE_THRESHOLDS,
+    fingerStates: hs.fingers.map(f => f.state),
+    thumbMp: { x: sm[4].x, y: sm[4].y },
+    tipsMp: TIPS.map(tip => ({ x: sm[tip].x, y: sm[tip].y })),
+    palmMp: { x: sm[0].x, y: sm[0].y },
+  };
 }

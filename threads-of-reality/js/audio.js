@@ -76,5 +76,8 @@ export function playGestureSound(type) {
     case 'crush':
       playCrush();
       break;
+    case 'rotate':
+      playTone({ freq: 528, freqEnd: 396, type: 'sine', duration: 0.5, gainPeak: 0.2 });
+      break;
   }
 }

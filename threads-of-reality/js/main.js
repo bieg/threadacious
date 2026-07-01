@@ -1,7 +1,7 @@
 import { initScene, render, getScene } from './scene.js';
-import { initHands, detectHands, latestResult, setOnGesture, getHandGrowingState } from './hands.js';
+import { initHands, detectHands, setOnGesture, getHandGrowingState, getHandInfo } from './hands.js';
 import * as hands from './hands.js';
-import { initStarfield, updateStarfield, crushImpulse } from './starfield.js';
+import { initStarfield, updateStarfield, crushImpulse, rotateImpulse } from './starfield.js';
 import { createThread, updateThreads, activeThreads, crushThreads } from './threads.js';
 import { initSolly, updateSolly, energizeSolly } from './solly.js';
 import { initAudio, resumeAudio, playGestureSound } from './audio.js';
@@ -13,7 +13,6 @@ const startBtn = document.getElementById('start-btn');
 const errorMsg = document.getElementById('error-msg');
 
 let scene;
-let started = false;
 
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
@@ -41,7 +40,7 @@ async function _start() {
 
   await initHands();
 
-  const sceneData = initScene();
+  initScene();
   scene = getScene();
 
   initStarfield(scene);
@@ -51,19 +50,22 @@ async function _start() {
   setOnGesture(_handleGesture);
 
   startOverlay.style.display = 'none';
-  started = true;
   requestAnimationFrame(_loop);
 }
 
 function _handleGesture(evt) {
   playGestureSound(evt.type);
-  setGestureHint(evt.type, 'confirmed');
 
   if (evt.type === 'crush') {
+    setGestureHint('crush', 'crush');
     crushThreads(evt.originPoint);
     crushImpulse(evt.originPoint);
     energizeSolly(1.5);
+  } else if (evt.type === 'rotate') {
+    setGestureHint('rotate', 'rotate');
+    rotateImpulse(evt.originPoint, evt.direction);
   } else {
+    setGestureHint(evt.type, 'confirmed');
     createThread(evt.type, evt.originPoint, evt.targetPoint, scene);
   }
 }
@@ -86,6 +88,9 @@ function _loop(time) {
   updateThreads(time);
   updateSolly(time, activeThreads);
   updateThreadCount(activeThreads.length);
-  drawSkeleton(hands.latestResult);
+
+  const handInfos = [getHandInfo(0), getHandInfo(1)];
+  drawSkeleton(hands.latestResult, handInfos);
+
   render();
 }

@@ -14,20 +14,51 @@ const HAND_CONNECTIONS = [
   [5,9],[9,13],[13,17],
 ];
 
+const FADE_DURATION = 1500;  // ms from detect to near-invisible
+const OPACITY_START = 0.65;
+const OPACITY_END   = 0.10;
+
 let gestureEl = null;
 let threadCountEl = null;
+let hand0dot = null;
+let hand1dot = null;
 let skeletonCanvas = null;
 let skeletonCtx = null;
 let flashTimeout = null;
 let lastCount = -1;
+
+// per-hand first-seen timestamp for fade
+const handFirstSeen = [null, null];
 
 export function initHud() {
   gestureEl = document.getElementById('gesture-indicator');
   threadCountEl = document.getElementById('thread-count');
   skeletonCanvas = document.getElementById('skeleton-canvas');
   skeletonCtx = skeletonCanvas.getContext('2d');
+
+  // inject hand indicator dots into the HUD
+  const hud = document.getElementById('hud');
+  const indicators = document.createElement('div');
+  indicators.id = 'hand-indicators';
+  indicators.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
+  hand0dot = _makeDot();
+  hand1dot = _makeDot();
+  indicators.appendChild(hand0dot);
+  indicators.appendChild(hand1dot);
+  hud.insertBefore(indicators, hud.firstChild);
+
   _resizeSkeleton();
   window.addEventListener('resize', _resizeSkeleton);
+}
+
+function _makeDot() {
+  const d = document.createElement('div');
+  d.style.cssText = `
+    width:8px;height:8px;border-radius:50%;
+    background:rgba(255,255,255,0.15);
+    transition:background 0.3s,box-shadow 0.3s;
+  `;
+  return d;
 }
 
 function _resizeSkeleton() {
@@ -60,6 +91,14 @@ export function setGestureHint(type, state) {
     flashTimeout = setTimeout(() => {
       if (gestureEl) gestureEl.style.opacity = '0';
     }, 400);
+  } else if (state === 'rotate') {
+    gestureEl.style.color = '#cc88ff';
+    gestureEl.textContent = '↻ ROTATE';
+    gestureEl.style.opacity = '1';
+    clearTimeout(flashTimeout);
+    flashTimeout = setTimeout(() => {
+      if (gestureEl) gestureEl.style.opacity = '0';
+    }, 500);
   } else {
     gestureEl.style.opacity = '0';
   }
@@ -71,34 +110,87 @@ export function updateThreadCount(count) {
   threadCountEl.textContent = `Threads: ${count}`;
 }
 
-export function drawSkeleton(handsResults) {
+export function drawSkeleton(handsResults, handInfos) {
   if (!skeletonCtx) return;
   const w = skeletonCanvas.width;
   const h = skeletonCanvas.height;
   skeletonCtx.clearRect(0, 0, w, h);
-  if (!handsResults || !handsResults.landmarks) return;
 
-  for (const landmarks of handsResults.landmarks) {
-    skeletonCtx.strokeStyle = 'rgba(255,255,255,0.10)';
+  const now = performance.now();
+
+  for (let hi = 0; hi < 2; hi++) {
+    const dot = hi === 0 ? hand0dot : hand1dot;
+    const landmarks = handsResults && handsResults.landmarks ? handsResults.landmarks[hi] : null;
+    const info = handInfos ? handInfos[hi] : null;
+
+    if (!landmarks) {
+      handFirstSeen[hi] = null;
+      if (dot) {
+        dot.style.background = 'rgba(255,255,255,0.15)';
+        dot.style.boxShadow = 'none';
+      }
+      continue;
+    }
+
+    // hand indicator dot — glow gold when detected
+    if (dot) {
+      dot.style.background = '#ffcc33';
+      dot.style.boxShadow = '0 0 6px 2px rgba(255,204,51,0.6)';
+    }
+
+    // fade-in opacity
+    if (handFirstSeen[hi] === null) handFirstSeen[hi] = now;
+    const elapsed = now - handFirstSeen[hi];
+    const t = Math.min(elapsed / FADE_DURATION, 1);
+    const opacity = OPACITY_START + (OPACITY_END - OPACITY_START) * t;
+
+    // draw bones
+    skeletonCtx.strokeStyle = `rgba(255,255,255,${opacity * 0.6})`;
     skeletonCtx.lineWidth = 1;
     skeletonCtx.beginPath();
     for (const [a, b] of HAND_CONNECTIONS) {
-      const ax = (1 - landmarks[a].x) * w;
-      const ay = landmarks[a].y * h;
-      const bx = (1 - landmarks[b].x) * w;
-      const by = landmarks[b].y * h;
-      skeletonCtx.moveTo(ax, ay);
-      skeletonCtx.lineTo(bx, by);
+      skeletonCtx.moveTo((1 - landmarks[a].x) * w, landmarks[a].y * h);
+      skeletonCtx.lineTo((1 - landmarks[b].x) * w, landmarks[b].y * h);
     }
     skeletonCtx.stroke();
 
-    skeletonCtx.fillStyle = 'rgba(255,255,255,0.15)';
+    // draw landmark dots
+    skeletonCtx.fillStyle = `rgba(255,255,255,${opacity})`;
     for (const lm of landmarks) {
-      const x = (1 - lm.x) * w;
-      const y = lm.y * h;
       skeletonCtx.beginPath();
-      skeletonCtx.arc(x, y, 2, 0, Math.PI * 2);
+      skeletonCtx.arc((1 - lm.x) * w, lm.y * h, 2, 0, Math.PI * 2);
       skeletonCtx.fill();
+    }
+
+    // draw progress arcs for growing gestures
+    if (info && info.present) {
+      const FINGERS = ['structure', 'energy', 'gravity', 'ghost'];
+      for (let fi = 0; fi < 4; fi++) {
+        if (info.fingerStates[fi] !== 'growing') continue;
+        const ratio = info.ratios[fi];
+        const armT = info.armThresholds[fi];
+        const relT = info.releaseThresholds[fi];
+        const progress = Math.max(0, Math.min(1, (ratio - relT) / (armT - relT)));
+        if (progress <= 0) continue;
+
+        const tx = (1 - info.thumbMp.x) * w;
+        const ty = info.thumbMp.y * h;
+        const color = THREAD_COLORS[FINGERS[fi]];
+
+        // outer dim ring
+        skeletonCtx.beginPath();
+        skeletonCtx.arc(tx, ty, 14, 0, Math.PI * 2);
+        skeletonCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+        skeletonCtx.lineWidth = 2;
+        skeletonCtx.stroke();
+
+        // progress arc (filled clockwise from top)
+        skeletonCtx.beginPath();
+        skeletonCtx.arc(tx, ty, 14, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+        skeletonCtx.strokeStyle = color;
+        skeletonCtx.lineWidth = 2.5;
+        skeletonCtx.stroke();
+      }
     }
   }
 }
