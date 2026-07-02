@@ -1,9 +1,10 @@
-import { initScene, render, getScene } from './scene.js';
+import { initScene, render, getScene, mpToWorld } from './scene.js';
 import { initHands, detectHands, setOnGesture, getHandGrowingState, getHandInfo } from './hands.js';
 import * as hands from './hands.js';
 import { initStarfield, updateStarfield, crushImpulse, rotateImpulse } from './starfield.js';
 import { createThread, updateThreads, activeThreads, crushThreads } from './threads.js';
-import { initSolly, updateSolly, energizeSolly } from './solly.js';
+import { initSolly, updateSolly, energizeSolly, onSollyTouch } from './solly.js';
+import * as solly from './solly.js';
 import { initAudio, resumeAudio, playGestureSound } from './audio.js';
 import { initHud, setGestureHint, updateThreadCount, drawSkeleton } from './hud.js';
 
@@ -48,6 +49,7 @@ async function _start() {
   initHud();
 
   setOnGesture(_handleGesture);
+  solly.onSollyTouch = () => playGestureSound('solly-touch');
 
   startOverlay.style.display = 'none';
   requestAnimationFrame(_loop);
@@ -84,9 +86,19 @@ function _loop(time) {
     if (hint && hint !== 'crush') setGestureHint(hint, 'growing');
   }
 
+  // collect active index-finger tip positions for Solly proximity
+  const fingerPositions = [];
+  for (const hi of [0, 1]) {
+    const info = getHandInfo(hi);
+    if (info.present && !info.orienting) {
+      // tipsMp[0] = index finger tip (landmark 8)
+      fingerPositions.push(mpToWorld(info.tipsMp[0].x, info.tipsMp[0].y));
+    }
+  }
+
   updateStarfield(time, activeThreads);
   updateThreads(time);
-  updateSolly(time, activeThreads);
+  updateSolly(time, activeThreads, fingerPositions);
   updateThreadCount(activeThreads.length);
 
   const handInfos = [getHandInfo(0), getHandInfo(1)];

@@ -27,6 +27,12 @@ export function initScene() {
 
   scene = new THREE.Scene();
 
+  // lights for Solly's 3D MeshStandardMaterial
+  scene.add(new THREE.AmbientLight(0x223344, 1.5));
+  const keyLight = new THREE.PointLight(0xffd76a, 4, 20);
+  keyLight.position.set(3, 4, 6);
+  scene.add(keyLight);
+
   _buildBloomComposer();
   window.addEventListener('resize', _onResize);
 
@@ -107,11 +113,13 @@ function _restoreMaterials() {
 export function getScene() { return scene; }
 export function getCamera() { return camera; }
 
+const WORLD_SCALE = 0.6; // compress hand-to-world mapping so closer hands still work
+
 export function mpToWorld(mpX, mpY, z = 0) {
   const aspect = window.innerWidth / window.innerHeight;
   const vHalfH = Math.tan((FOV * Math.PI / 180) / 2) * CAMERA_Z;
   const vHalfW = vHalfH * aspect;
-  const wx = (1 - mpX - 0.5) * vHalfW * 2;
-  const wy = -(mpY - 0.5) * vHalfH * 2;
+  const wx = (1 - mpX - 0.5) * vHalfW * 2 * WORLD_SCALE;
+  const wy = -(mpY - 0.5) * vHalfH * 2 * WORLD_SCALE;
   return new THREE.Vector3(wx, wy, z);
 }
