@@ -44,10 +44,13 @@ function _dist(a, b) {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+const ORIENTATION_WINDOW_MS = 2000;
+
 function _initHandState() {
   return {
     smoothed: Array.from({ length: 21 }, () => ({ x: 0, y: 0, z: 0 })),
     seenBefore: false,
+    entryTime: null,
     fingers: FINGERS.map(() => ({ state: 'idle', frames: 0, lastFire: 0 })),
     fist: { state: 'idle', frames: 0, lastFire: 0 },
     rollHistory: [],
@@ -72,6 +75,8 @@ export function detectHands(videoEl) {
       : _initHandState();
     handStates[hi] = hs;
 
+    const now = performance.now();
+
     if (!hs.seenBefore) {
       for (let j = 0; j < 21; j++) {
         hs.smoothed[j].x = lms[j].x;
@@ -79,12 +84,21 @@ export function detectHands(videoEl) {
         hs.smoothed[j].z = lms[j].z;
       }
       hs.seenBefore = true;
+      hs.entryTime = now;
     } else {
       for (let j = 0; j < 21; j++) {
         hs.smoothed[j].x = hs.smoothed[j].x * (1 - ALPHA) + lms[j].x * ALPHA;
         hs.smoothed[j].y = hs.smoothed[j].y * (1 - ALPHA) + lms[j].y * ALPHA;
         hs.smoothed[j].z = hs.smoothed[j].z * (1 - ALPHA) + lms[j].z * ALPHA;
       }
+    }
+
+    // orientation window — show hand, block all gesture events
+    if (now - hs.entryTime < ORIENTATION_WINDOW_MS) {
+      hs.fingers.forEach(f => { f.state = 'idle'; f.frames = 0; });
+      hs.fist.state = 'idle'; hs.fist.frames = 0;
+      hs.rollHistory = [];
+      continue;
     }
 
     const sm = hs.smoothed;
@@ -205,8 +219,11 @@ export function getHandInfo(handIndex) {
   if (!present) return { present: false };
   const sm = hs.smoothed;
   const ref = Math.max(_dist(sm[0], sm[9]), 0.01);
+  const orienting = (performance.now() - hs.entryTime) < ORIENTATION_WINDOW_MS;
   return {
     present: true,
+    orienting,
+    entryTime: hs.entryTime,
     ratios: TIPS.map(tip => _dist(sm[4], sm[tip]) / ref),
     armThresholds: ARM_THRESHOLDS,
     releaseThresholds: RELEASE_THRESHOLDS,

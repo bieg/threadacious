@@ -14,9 +14,10 @@ const HAND_CONNECTIONS = [
   [5,9],[9,13],[13,17],
 ];
 
-const FADE_DURATION = 1500;  // ms from detect to near-invisible
-const OPACITY_START = 0.65;
-const OPACITY_END   = 0.10;
+const ORIENTATION_MS  = 2000; // hold at visible opacity
+const FADE_DURATION   = 1000; // fade from visible to dim after orientation
+const OPACITY_HOLD    = 0.20; // opacity during orientation window
+const OPACITY_END     = 0.08; // opacity when settled
 
 let gestureEl = null;
 let threadCountEl = null;
@@ -132,17 +133,30 @@ export function drawSkeleton(handsResults, handInfos) {
       continue;
     }
 
-    // hand indicator dot — glow gold when detected
+    // hand indicator dot — pulse white during orientation, gold after
     if (dot) {
-      dot.style.background = '#ffcc33';
-      dot.style.boxShadow = '0 0 6px 2px rgba(255,204,51,0.6)';
+      const orienting = info && info.orienting;
+      if (orienting) {
+        dot.style.background = 'rgba(255,255,255,0.9)';
+        dot.style.boxShadow = '0 0 8px 3px rgba(255,255,255,0.5)';
+      } else {
+        dot.style.background = '#ffcc33';
+        dot.style.boxShadow = '0 0 6px 2px rgba(255,204,51,0.6)';
+      }
     }
 
-    // fade-in opacity
+    // orientation hold then fade
     if (handFirstSeen[hi] === null) handFirstSeen[hi] = now;
     const elapsed = now - handFirstSeen[hi];
-    const t = Math.min(elapsed / FADE_DURATION, 1);
-    const opacity = OPACITY_START + (OPACITY_END - OPACITY_START) * t;
+    let opacity;
+    if (elapsed < ORIENTATION_MS) {
+      // hold at 20% during orientation window (fade in over first 300ms)
+      opacity = OPACITY_HOLD * Math.min(elapsed / 300, 1);
+    } else {
+      // fade from 20% to dim over FADE_DURATION
+      const t = Math.min((elapsed - ORIENTATION_MS) / FADE_DURATION, 1);
+      opacity = OPACITY_HOLD + (OPACITY_END - OPACITY_HOLD) * t;
+    }
 
     // draw bones
     skeletonCtx.strokeStyle = `rgba(255,255,255,${opacity * 0.6})`;
