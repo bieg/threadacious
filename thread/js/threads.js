@@ -37,18 +37,20 @@ class Thread {
 
 function _buildMesh(type, start, end) {
   if (type === 'structure') {
-    const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const mat = new THREE.LineBasicMaterial({ color: THREAD_COLORS.structure });
-    return new THREE.Line(geo, mat);
+    const curve = new THREE.CatmullRomCurve3([start, end]);
+    const geo = new THREE.TubeGeometry(curve, 20, 0.012, 6, false);
+    const mat = new THREE.MeshBasicMaterial({ color: THREAD_COLORS.structure });
+    return new THREE.Mesh(geo, mat);
   }
   if (type === 'ghost') {
-    const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const mat = new THREE.LineBasicMaterial({
+    const curve = new THREE.CatmullRomCurve3([start, end]);
+    const geo = new THREE.TubeGeometry(curve, 20, 0.006, 6, false);
+    const mat = new THREE.MeshBasicMaterial({
       color: THREAD_COLORS.ghost,
       transparent: true,
       opacity: 0.08,
     });
-    return new THREE.Line(geo, mat);
+    return new THREE.Mesh(geo, mat);
   }
   // energy + gravity — TubeGeometry
   const curve = new THREE.CatmullRomCurve3([start, end]);

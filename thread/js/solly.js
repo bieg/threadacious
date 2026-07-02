@@ -24,11 +24,11 @@ export function initSolly(scene) {
 
   const tetraGeo = new THREE.TetrahedronGeometry(0.45, 0);
 
-  // transparent faces — barely there, void shows through
+  // semi-transparent faces at 50% — 3D volume visible, void shows through
   faceMesh = new THREE.Mesh(tetraGeo, new THREE.MeshBasicMaterial({
     color: GOLD,
     transparent: true,
-    opacity: 0.07,
+    opacity: 0.50,
     side: THREE.DoubleSide,
     depthWrite: false,
   }));
@@ -110,8 +110,8 @@ export function updateSolly(time, activeThreads, fingerPositions = []) {
   const colorT = Math.min(proximityLevel * 0.7 + touchFlash, 1);
   edgeLines.material.color.lerpColors(GOLD, WHITE, colorT);
 
-  // face opacity: subtle increase when near
-  faceMesh.material.opacity = 0.07 + proximityLevel * 0.10 + touchFlash * 0.15;
+  // face opacity: 50% base, brightens on touch
+  faceMesh.material.opacity = 0.50 + proximityLevel * 0.15 + touchFlash * 0.25;
 }
 
 export function energizeSolly(amount = 1.5) {
