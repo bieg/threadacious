@@ -3,8 +3,7 @@ import { initHands, detectHands, setOnGesture, getHandGrowingState, getHandInfo 
 import * as hands from './hands.js';
 import { initStarfield, updateStarfield, crushImpulse, rotateImpulse } from './starfield.js';
 import { createThread, updateThreads, activeThreads, crushThreads } from './threads.js';
-import { initSolly, updateSolly, energizeSolly, onSollyTouch } from './solly.js';
-import * as solly from './solly.js';
+import { initSolly, updateSolly, energizeSolly, setOnSollyTouch } from './solly.js';
 import { initAudio, resumeAudio, playGestureSound } from './audio.js';
 import { initHud, setGestureHint, updateThreadCount, drawSkeleton } from './hud.js';
 
@@ -49,7 +48,7 @@ async function _start() {
   initHud();
 
   setOnGesture(_handleGesture);
-  solly.onSollyTouch = () => playGestureSound('solly-touch');
+  setOnSollyTouch(() => playGestureSound('solly-touch'));
 
   startOverlay.style.display = 'none';
   requestAnimationFrame(_loop);

@@ -18,6 +18,7 @@ let touchFlash     = 0;
 const origin = new THREE.Vector3(0, 0, 0);
 
 export let onSollyTouch = null;
+export function setOnSollyTouch(fn) { onSollyTouch = fn; }
 
 export function initSolly(scene) {
   group = new THREE.Group();
