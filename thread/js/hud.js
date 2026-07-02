@@ -14,10 +14,10 @@ const HAND_CONNECTIONS = [
   [5,9],[9,13],[13,17],
 ];
 
-const ORIENTATION_MS  = 2000; // hold at visible opacity
-const FADE_DURATION   = 1000; // fade from visible to dim after orientation
-const OPACITY_HOLD    = 0.20; // opacity during orientation window
-const OPACITY_END     = 0.08; // opacity when settled
+const ORIENTATION_MS  = 2000;
+const FADE_DURATION   = 1000;
+const OPACITY_HOLD    = 0.85; // bright during orientation window
+const OPACITY_END     = 0.30; // 70% transparent after settled
 
 let gestureEl = null;
 let threadCountEl = null;
@@ -111,6 +111,64 @@ export function updateThreadCount(count) {
   threadCountEl.textContent = `Threads: ${count}`;
 }
 
+const HAND_OUTLINE = [0, 1, 2, 3, 4, 8, 12, 16, 20, 19, 18, 17];
+const FINGERTIPS   = [4, 8, 12, 16, 20];
+
+function _drawHand(ctx, landmarks, alpha, w, h) {
+  const X = lm => (1 - lm.x) * w;
+  const Y = lm => lm.y * h;
+
+  // filled hand silhouette
+  ctx.beginPath();
+  HAND_OUTLINE.forEach((i, idx) => {
+    const lm = landmarks[i];
+    idx === 0 ? ctx.moveTo(X(lm), Y(lm)) : ctx.lineTo(X(lm), Y(lm));
+  });
+  ctx.closePath();
+  ctx.fillStyle = `rgba(255,245,220,${alpha * 0.15})`;
+  ctx.fill();
+
+  // bone lines: glow → mid → bright edge
+  ctx.lineCap = 'round';
+  [[10, alpha * 0.07], [4, alpha * 0.18], [1.5, alpha * 0.75]].forEach(([lw, a]) => {
+    ctx.beginPath();
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = `rgba(255,250,230,${a})`;
+    for (const [a2, b] of HAND_CONNECTIONS) {
+      ctx.moveTo(X(landmarks[a2]), Y(landmarks[a2]));
+      ctx.lineTo(X(landmarks[b]),  Y(landmarks[b]));
+    }
+    ctx.stroke();
+  });
+
+  // palm center glow
+  const palm = landmarks[9];
+  const pg = ctx.createRadialGradient(X(palm), Y(palm), 0, X(palm), Y(palm), 45);
+  pg.addColorStop(0, `rgba(255,200,80,${alpha * 0.10})`);
+  pg.addColorStop(1, `rgba(255,200,80,0)`);
+  ctx.fillStyle = pg;
+  ctx.beginPath();
+  ctx.arc(X(palm), Y(palm), 45, 0, Math.PI * 2);
+  ctx.fill();
+
+  // golden glow + bright dot at fingertips
+  for (const ti of FINGERTIPS) {
+    const x = X(landmarks[ti]), y = Y(landmarks[ti]);
+    const rg = ctx.createRadialGradient(x, y, 0, x, y, 9);
+    rg.addColorStop(0,   `rgba(255,220,100,${alpha * 0.9})`);
+    rg.addColorStop(0.5, `rgba(255,200,60, ${alpha * 0.35})`);
+    rg.addColorStop(1,   `rgba(255,180,40, 0)`);
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(x, y, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function _drawZone(w, h, handInZone) {
   const cx = w * 0.5;
   const cy = h * 0.62;
@@ -201,23 +259,7 @@ export function drawSkeleton(handsResults, handInfos) {
       opacity = OPACITY_HOLD + (OPACITY_END - OPACITY_HOLD) * t;
     }
 
-    // draw bones
-    skeletonCtx.strokeStyle = `rgba(255,255,255,${opacity * 0.6})`;
-    skeletonCtx.lineWidth = 1;
-    skeletonCtx.beginPath();
-    for (const [a, b] of HAND_CONNECTIONS) {
-      skeletonCtx.moveTo((1 - landmarks[a].x) * w, landmarks[a].y * h);
-      skeletonCtx.lineTo((1 - landmarks[b].x) * w, landmarks[b].y * h);
-    }
-    skeletonCtx.stroke();
-
-    // draw landmark dots
-    skeletonCtx.fillStyle = `rgba(255,255,255,${opacity})`;
-    for (const lm of landmarks) {
-      skeletonCtx.beginPath();
-      skeletonCtx.arc((1 - lm.x) * w, lm.y * h, 2, 0, Math.PI * 2);
-      skeletonCtx.fill();
-    }
+    _drawHand(skeletonCtx, landmarks, opacity, w, h);
 
     // draw progress arcs for growing gestures
     if (info && info.present) {
