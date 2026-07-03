@@ -142,62 +142,70 @@ function _drawHand(ctx, landmarks, alpha, w, h) {
   const X = lm => (1 - lm.x) * w;
   const Y = lm => lm.y * h;
 
-  // filled hand silhouette
-  ctx.beginPath();
-  HAND_OUTLINE.forEach((i, idx) => {
-    const lm = landmarks[i];
-    idx === 0 ? ctx.moveTo(X(lm), Y(lm)) : ctx.lineTo(X(lm), Y(lm));
-  });
-  ctx.closePath();
-  ctx.fillStyle = `rgba(255,245,220,${alpha * 0.15})`;
-  ctx.fill();
+  // scale finger width to actual hand size on screen
+  const wrist = landmarks[0], mcp9 = landmarks[9];
+  const dx = X(mcp9) - X(wrist), dy = Y(mcp9) - Y(wrist);
+  const handLen = Math.sqrt(dx * dx + dy * dy);
+  const fw = Math.max(8, handLen * 0.14); // finger tube width
 
-  // bone lines: glow → mid → bright edge
   ctx.lineCap = 'round';
-  [[10, alpha * 0.07], [4, alpha * 0.18], [1.5, alpha * 0.75]].forEach(([lw, a]) => {
+  ctx.lineJoin = 'round';
+
+  const _strokeBones = (lw, color) => {
     ctx.beginPath();
     ctx.lineWidth = lw;
-    ctx.strokeStyle = `rgba(255,250,230,${a})`;
-    for (const [a2, b] of HAND_CONNECTIONS) {
-      ctx.moveTo(X(landmarks[a2]), Y(landmarks[a2]));
-      ctx.lineTo(X(landmarks[b]),  Y(landmarks[b]));
+    ctx.strokeStyle = color;
+    for (const [a, b] of HAND_CONNECTIONS) {
+      ctx.moveTo(X(landmarks[a]), Y(landmarks[a]));
+      ctx.lineTo(X(landmarks[b]), Y(landmarks[b]));
     }
     ctx.stroke();
-  });
+  };
 
-  // palm center glow
-  const palm = landmarks[9];
-  const pg = ctx.createRadialGradient(X(palm), Y(palm), 0, X(palm), Y(palm), 45);
-  pg.addColorStop(0, `rgba(255,200,80,${alpha * 0.10})`);
+  // 4-pass rendering: outer glow → body → mid highlight → bright edge
+  _strokeBones(fw * 2.8, `rgba(255,230,150,${alpha * 0.05})`);
+  _strokeBones(fw * 1.8, `rgba(255,245,220,${alpha * 0.30})`);
+  _strokeBones(fw * 0.9, `rgba(255,252,238,${alpha * 0.50})`);
+  _strokeBones(fw * 0.15, `rgba(255,255,255,${alpha * 0.85})`);
+
+  // palm fill
+  ctx.beginPath();
+  [0, 5, 9, 13, 17].forEach((i, idx) => {
+    idx === 0 ? ctx.moveTo(X(landmarks[i]), Y(landmarks[i]))
+              : ctx.lineTo(X(landmarks[i]), Y(landmarks[i]));
+  });
+  ctx.closePath();
+  ctx.fillStyle = `rgba(255,240,210,${alpha * 0.18})`;
+  ctx.fill();
+
+  // palm center warm glow
+  const palmX = X(mcp9), palmY = Y(mcp9);
+  const pg = ctx.createRadialGradient(palmX, palmY, 0, palmX, palmY, handLen * 0.5);
+  pg.addColorStop(0, `rgba(255,200,80,${alpha * 0.12})`);
   pg.addColorStop(1, `rgba(255,200,80,0)`);
   ctx.fillStyle = pg;
   ctx.beginPath();
-  ctx.arc(X(palm), Y(palm), 45, 0, Math.PI * 2);
+  ctx.arc(palmX, palmY, handLen * 0.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // golden glow + bright dot at fingertips
+  // golden fingertip glow
   for (const ti of FINGERTIPS) {
     const x = X(landmarks[ti]), y = Y(landmarks[ti]);
-    const rg = ctx.createRadialGradient(x, y, 0, x, y, 9);
-    rg.addColorStop(0,   `rgba(255,220,100,${alpha * 0.9})`);
-    rg.addColorStop(0.5, `rgba(255,200,60, ${alpha * 0.35})`);
-    rg.addColorStop(1,   `rgba(255,180,40, 0)`);
+    const rg = ctx.createRadialGradient(x, y, 0, x, y, fw * 1.2);
+    rg.addColorStop(0, `rgba(255,220,100,${alpha * 0.95})`);
+    rg.addColorStop(1, `rgba(255,180,40,0)`);
     ctx.fillStyle = rg;
     ctx.beginPath();
-    ctx.arc(x, y, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-    ctx.beginPath();
-    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+    ctx.arc(x, y, fw * 1.2, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // golden sparkles scattered across palm and fingers
+  // scattered sparkles
   const now = performance.now();
   for (let si = 0; si < SPARKLE_LMS.length; si++) {
     const lm = landmarks[SPARKLE_LMS[si]];
     const flicker = 0.4 + 0.6 * Math.abs(Math.sin(now * 0.0025 + si * 1.9));
-    _drawSparkle(ctx, X(lm), Y(lm), 3 + flicker * 4, alpha * flicker * 0.75);
+    _drawSparkle(ctx, X(lm), Y(lm), fw * 0.25 + flicker * fw * 0.35, alpha * flicker * 0.75);
   }
 }
 
