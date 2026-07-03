@@ -12,7 +12,23 @@ const startOverlay = document.getElementById('start-overlay');
 const startBtn = document.getElementById('start-btn');
 const errorMsg = document.getElementById('error-msg');
 
-let scene;
+// Boot scene + stars immediately so the page feels alive before camera starts
+initScene();
+const scene = getScene();
+initStarfield(scene);
+initSolly(scene);
+initHud();
+setOnSollyTouch(() => playGestureSound('solly-touch'));
+requestAnimationFrame(_preLoop);
+
+function _preLoop(time) {
+  if (!_preLoop.running) return;
+  requestAnimationFrame(_preLoop);
+  updateStarfield(time, []);
+  updateSolly(time, [], [], []);
+  render();
+}
+_preLoop.running = true;
 
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
@@ -39,17 +55,9 @@ async function _start() {
   videoEl.play();
 
   await initHands();
-
-  initScene();
-  scene = getScene();
-
-  initStarfield(scene);
-  initSolly(scene);
-  initHud();
-
   setOnGesture(_handleGesture);
-  setOnSollyTouch(() => playGestureSound('solly-touch'));
 
+  _preLoop.running = false;
   startOverlay.style.display = 'none';
   requestAnimationFrame(_loop);
 }
