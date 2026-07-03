@@ -111,69 +111,36 @@ export function updateThreadCount(count) {
   threadCountEl.textContent = `Threads: ${count}`;
 }
 
-const FINGERTIPS  = [4, 8, 12, 16, 20];
-const FINGER_SEQS = [
-  [1, 2, 3, 4],
-  [5, 6, 7, 8],
-  [9, 10, 11, 12],
-  [13, 14, 15, 16],
-  [17, 18, 19, 20],
-];
-const PALM_LMS    = [0, 1, 5, 9, 13, 17];
+const FINGERTIPS = [4, 8, 12, 16, 20];
 
-function _drawHand(ctx, landmarks, alpha, w, h) {
+function _drawHand(ctx, landmarks, w, h) {
   const X = lm => (1 - lm.x) * w;
   const Y = lm => lm.y * h;
 
-  // finger tube width scaled to hand size
-  const handLen = Math.hypot(X(landmarks[9]) - X(landmarks[0]), Y(landmarks[9]) - Y(landmarks[0]));
-  const fw = Math.max(6, handLen * 0.13);
-
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  // palm fill
+  // bones
   ctx.beginPath();
-  PALM_LMS.forEach((i, idx) => {
-    idx === 0 ? ctx.moveTo(X(landmarks[i]), Y(landmarks[i]))
-              : ctx.lineTo(X(landmarks[i]), Y(landmarks[i]));
-  });
-  ctx.closePath();
-  ctx.fillStyle = `rgba(255,240,215,${alpha * 0.25})`;
-  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineCap = 'round';
+  for (const [a, b] of HAND_CONNECTIONS) {
+    ctx.moveTo(X(landmarks[a]), Y(landmarks[a]));
+    ctx.lineTo(X(landmarks[b]), Y(landmarks[b]));
+  }
+  ctx.stroke();
 
-  // each finger: glow pass then bright stroke
-  for (const seq of FINGER_SEQS) {
-    // connect finger to palm base
-    const base = landmarks[seq[0] === 1 ? 0 : seq[0]];
-    const path = () => {
-      ctx.beginPath();
-      ctx.moveTo(X(landmarks[0]), Y(landmarks[0])); // wrist anchor
-      seq.forEach(i => ctx.lineTo(X(landmarks[i]), Y(landmarks[i])));
-    };
-    // glow
-    path();
-    ctx.lineWidth = fw * 2.2;
-    ctx.strokeStyle = `rgba(255,240,200,${alpha * 0.18})`;
-    ctx.stroke();
-    // body
-    path();
-    ctx.lineWidth = fw * 1.1;
-    ctx.strokeStyle = `rgba(255,248,228,${alpha * 0.55})`;
-    ctx.stroke();
-    // bright edge
-    path();
-    ctx.lineWidth = fw * 0.18;
-    ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.90})`;
-    ctx.stroke();
+  // joint dots
+  ctx.fillStyle = 'rgba(255,255,255,0.90)';
+  for (const lm of landmarks) {
+    ctx.beginPath();
+    ctx.arc(X(lm), Y(lm), 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // fingertip dots
+  // fingertip dots slightly larger
+  ctx.fillStyle = 'rgba(255,220,100,0.95)';
   for (const ti of FINGERTIPS) {
-    const x = X(landmarks[ti]), y = Y(landmarks[ti]);
-    ctx.fillStyle = `rgba(255,255,255,${alpha * 0.95})`;
     ctx.beginPath();
-    ctx.arc(x, y, fw * 0.18, 0, Math.PI * 2);
+    ctx.arc(X(landmarks[ti]), Y(landmarks[ti]), 4, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -225,7 +192,7 @@ export function drawSkeleton(handsResults, handInfos) {
       opacity = OPACITY_HOLD + (OPACITY_END - OPACITY_HOLD) * t;
     }
 
-    _drawHand(skeletonCtx, landmarks, opacity, w, h);
+    _drawHand(skeletonCtx, landmarks, w, h);
 
     // draw progress arcs for growing gestures
     if (info && info.present) {
