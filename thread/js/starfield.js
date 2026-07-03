@@ -29,8 +29,8 @@ export function initStarfield(scene) {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
   const material = new THREE.PointsMaterial({
-    size: 0.05,
-    color: 0xaad4ff,
+    size: 0.09,
+    color: 0xffffff,
     blending: THREE.AdditiveBlending,
     transparent: true,
     depthWrite: false,

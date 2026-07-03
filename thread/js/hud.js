@@ -15,9 +15,9 @@ const HAND_CONNECTIONS = [
 ];
 
 const ORIENTATION_MS  = 2000;
-const FADE_DURATION   = 1000;
-const OPACITY_HOLD    = 0.85; // bright during orientation window
-const OPACITY_END     = 0.30; // 70% transparent after settled
+const FADE_DURATION   = 800;
+const OPACITY_HOLD    = 0.85;
+const OPACITY_END     = 0.70; // hand always clearly visible
 
 let gestureEl = null;
 let threadCountEl = null;
@@ -169,54 +169,11 @@ function _drawHand(ctx, landmarks, alpha, w, h) {
   }
 }
 
-function _drawZone(w, h, handInZone) {
-  const cx = w * 0.5;
-  const cy = h * 0.62;
-  const r  = Math.min(w, h) * 0.18;
-  const a  = handInZone ? 0.38 : 0.10;
-
-  // soft radial glow behind the ring
-  const grad = skeletonCtx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 1.4);
-  grad.addColorStop(0,   `rgba(60,255,110,0)`);
-  grad.addColorStop(0.5, `rgba(60,255,110,${a * 0.25})`);
-  grad.addColorStop(1,   `rgba(60,255,110,0)`);
-  skeletonCtx.fillStyle = grad;
-  skeletonCtx.beginPath();
-  skeletonCtx.arc(cx, cy, r * 1.4, 0, Math.PI * 2);
-  skeletonCtx.fill();
-
-  // dashed ring
-  skeletonCtx.beginPath();
-  skeletonCtx.arc(cx, cy, r, 0, Math.PI * 2);
-  skeletonCtx.strokeStyle = `rgba(60,255,110,${a})`;
-  skeletonCtx.lineWidth = 1;
-  skeletonCtx.setLineDash([5, 10]);
-  skeletonCtx.stroke();
-  skeletonCtx.setLineDash([]);
-}
-
 export function drawSkeleton(handsResults, handInfos) {
   if (!skeletonCtx) return;
   const w = skeletonCanvas.width;
   const h = skeletonCanvas.height;
   skeletonCtx.clearRect(0, 0, w, h);
-
-  // check if any hand landmark is inside the interaction zone
-  const zoneCx = w * 0.5, zoneCy = h * 0.62, zoneR = Math.min(w, h) * 0.18;
-  let handInZone = false;
-  if (handsResults && handsResults.landmarks) {
-    for (const hand of handsResults.landmarks) {
-      if (!hand) continue;
-      for (const lm of hand) {
-        const px = (1 - lm.x) * w, py = lm.y * h;
-        if ((px - zoneCx) ** 2 + (py - zoneCy) ** 2 < zoneR * zoneR) {
-          handInZone = true; break;
-        }
-      }
-      if (handInZone) break;
-    }
-  }
-  _drawZone(w, h, handInZone);
 
   const now = performance.now();
 
