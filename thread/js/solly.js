@@ -50,7 +50,7 @@ export function initSolly(scene) {
 const _tmp = new THREE.Vector3();
 const _cp  = new THREE.Vector3();
 
-export function updateSolly(time, activeThreads, fingerPositions = []) {
+export function updateSolly(time, activeThreads, fingerPositions = [], palmPositions = []) {
   let energySum = 0;
   let gravityTarget = null;
   let nearestGravityDist = Infinity;
@@ -71,7 +71,14 @@ export function updateSolly(time, activeThreads, fingerPositions = []) {
     }
   }
 
-  _tmp.copy(gravityTarget || origin).sub(group.position);
+  // float above palm when hand present and no gravity thread
+  let palmTarget = null;
+  if (!gravityTarget && palmPositions.length > 0) {
+    palmTarget = palmPositions[0].clone();
+    palmTarget.y += 1.2; // hover above the palm
+  }
+
+  _tmp.copy(gravityTarget || palmTarget || origin).sub(group.position);
   velocity.addScaledVector(_tmp, SPRING);
   velocity.multiplyScalar(DAMPING);
   group.position.add(velocity);

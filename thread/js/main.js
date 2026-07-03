@@ -85,19 +85,20 @@ function _loop(time) {
     if (hint && hint !== 'crush') setGestureHint(hint, 'growing');
   }
 
-  // collect active index-finger tip positions for Solly proximity
+  // collect finger tip + palm positions for Solly proximity and attraction
   const fingerPositions = [];
+  const palmPositions   = [];
   for (const hi of [0, 1]) {
     const info = getHandInfo(hi);
     if (info.present && !info.orienting) {
-      // tipsMp[0] = index finger tip (landmark 8)
       fingerPositions.push(mpToWorld(info.tipsMp[0].x, info.tipsMp[0].y));
+      if (info.palmMp) palmPositions.push(mpToWorld(info.palmMp.x, info.palmMp.y));
     }
   }
 
   updateStarfield(time, activeThreads);
   updateThreads(time);
-  updateSolly(time, activeThreads, fingerPositions);
+  updateSolly(time, activeThreads, fingerPositions, palmPositions);
   updateThreadCount(activeThreads.length);
 
   const handInfos = [getHandInfo(0), getHandInfo(1)];

@@ -111,8 +111,32 @@ export function updateThreadCount(count) {
   threadCountEl.textContent = `Threads: ${count}`;
 }
 
-const HAND_OUTLINE = [0, 1, 2, 3, 4, 8, 12, 16, 20, 19, 18, 17];
-const FINGERTIPS   = [4, 8, 12, 16, 20];
+const HAND_OUTLINE   = [0, 1, 2, 3, 4, 8, 12, 16, 20, 19, 18, 17];
+const FINGERTIPS     = [4, 8, 12, 16, 20];
+const SPARKLE_LMS    = [0, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19];
+
+function _drawSparkle(ctx, x, y, size, alpha) {
+  const rg = ctx.createRadialGradient(x, y, 0, x, y, size);
+  rg.addColorStop(0,   `rgba(255,220,100,${alpha})`);
+  rg.addColorStop(0.5, `rgba(255,180,50,${alpha * 0.4})`);
+  rg.addColorStop(1,   `rgba(255,160,30,0)`);
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.arc(x, y, size, 0, Math.PI * 2);
+  ctx.fill();
+  // bright white core
+  ctx.fillStyle = `rgba(255,255,220,${alpha * 0.95})`;
+  ctx.beginPath();
+  ctx.arc(x, y, size * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  // cross flare
+  ctx.strokeStyle = `rgba(255,240,160,${alpha * 0.5})`;
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(x - size * 1.4, y); ctx.lineTo(x + size * 1.4, y);
+  ctx.moveTo(x, y - size * 1.4); ctx.lineTo(x, y + size * 1.4);
+  ctx.stroke();
+}
 
 function _drawHand(ctx, landmarks, alpha, w, h) {
   const X = lm => (1 - lm.x) * w;
@@ -166,6 +190,14 @@ function _drawHand(ctx, landmarks, alpha, w, h) {
     ctx.beginPath();
     ctx.arc(x, y, 1.5, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // golden sparkles scattered across palm and fingers
+  const now = performance.now();
+  for (let si = 0; si < SPARKLE_LMS.length; si++) {
+    const lm = landmarks[SPARKLE_LMS[si]];
+    const flicker = 0.4 + 0.6 * Math.abs(Math.sin(now * 0.0025 + si * 1.9));
+    _drawSparkle(ctx, X(lm), Y(lm), 3 + flicker * 4, alpha * flicker * 0.75);
   }
 }
 
