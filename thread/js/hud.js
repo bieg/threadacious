@@ -111,101 +111,70 @@ export function updateThreadCount(count) {
   threadCountEl.textContent = `Threads: ${count}`;
 }
 
-const HAND_OUTLINE   = [0, 1, 2, 3, 4, 8, 12, 16, 20, 19, 18, 17];
-const FINGERTIPS     = [4, 8, 12, 16, 20];
-const SPARKLE_LMS    = [0, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19];
-
-function _drawSparkle(ctx, x, y, size, alpha) {
-  const rg = ctx.createRadialGradient(x, y, 0, x, y, size);
-  rg.addColorStop(0,   `rgba(255,220,100,${alpha})`);
-  rg.addColorStop(0.5, `rgba(255,180,50,${alpha * 0.4})`);
-  rg.addColorStop(1,   `rgba(255,160,30,0)`);
-  ctx.fillStyle = rg;
-  ctx.beginPath();
-  ctx.arc(x, y, size, 0, Math.PI * 2);
-  ctx.fill();
-  // bright white core
-  ctx.fillStyle = `rgba(255,255,220,${alpha * 0.95})`;
-  ctx.beginPath();
-  ctx.arc(x, y, size * 0.18, 0, Math.PI * 2);
-  ctx.fill();
-  // cross flare
-  ctx.strokeStyle = `rgba(255,240,160,${alpha * 0.5})`;
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(x - size * 1.4, y); ctx.lineTo(x + size * 1.4, y);
-  ctx.moveTo(x, y - size * 1.4); ctx.lineTo(x, y + size * 1.4);
-  ctx.stroke();
-}
+const FINGERTIPS  = [4, 8, 12, 16, 20];
+const FINGER_SEQS = [
+  [1, 2, 3, 4],
+  [5, 6, 7, 8],
+  [9, 10, 11, 12],
+  [13, 14, 15, 16],
+  [17, 18, 19, 20],
+];
+const PALM_LMS    = [0, 1, 5, 9, 13, 17];
 
 function _drawHand(ctx, landmarks, alpha, w, h) {
   const X = lm => (1 - lm.x) * w;
   const Y = lm => lm.y * h;
 
-  // scale finger width to actual hand size on screen
-  const wrist = landmarks[0], mcp9 = landmarks[9];
-  const dx = X(mcp9) - X(wrist), dy = Y(mcp9) - Y(wrist);
-  const handLen = Math.sqrt(dx * dx + dy * dy);
-  const fw = Math.max(8, handLen * 0.14); // finger tube width
+  // finger tube width scaled to hand size
+  const handLen = Math.hypot(X(landmarks[9]) - X(landmarks[0]), Y(landmarks[9]) - Y(landmarks[0]));
+  const fw = Math.max(6, handLen * 0.13);
 
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  const _strokeBones = (lw, color) => {
-    ctx.beginPath();
-    ctx.lineWidth = lw;
-    ctx.strokeStyle = color;
-    for (const [a, b] of HAND_CONNECTIONS) {
-      ctx.moveTo(X(landmarks[a]), Y(landmarks[a]));
-      ctx.lineTo(X(landmarks[b]), Y(landmarks[b]));
-    }
-    ctx.stroke();
-  };
-
-  // 4-pass rendering: outer glow → body → mid highlight → bright edge
-  _strokeBones(fw * 2.8, `rgba(255,230,150,${alpha * 0.05})`);
-  _strokeBones(fw * 1.8, `rgba(255,245,220,${alpha * 0.30})`);
-  _strokeBones(fw * 0.9, `rgba(255,252,238,${alpha * 0.50})`);
-  _strokeBones(fw * 0.15, `rgba(255,255,255,${alpha * 0.85})`);
-
   // palm fill
   ctx.beginPath();
-  [0, 5, 9, 13, 17].forEach((i, idx) => {
+  PALM_LMS.forEach((i, idx) => {
     idx === 0 ? ctx.moveTo(X(landmarks[i]), Y(landmarks[i]))
               : ctx.lineTo(X(landmarks[i]), Y(landmarks[i]));
   });
   ctx.closePath();
-  ctx.fillStyle = `rgba(255,240,210,${alpha * 0.18})`;
+  ctx.fillStyle = `rgba(255,240,215,${alpha * 0.25})`;
   ctx.fill();
 
-  // palm center warm glow
-  const palmX = X(mcp9), palmY = Y(mcp9);
-  const pg = ctx.createRadialGradient(palmX, palmY, 0, palmX, palmY, handLen * 0.5);
-  pg.addColorStop(0, `rgba(255,200,80,${alpha * 0.12})`);
-  pg.addColorStop(1, `rgba(255,200,80,0)`);
-  ctx.fillStyle = pg;
-  ctx.beginPath();
-  ctx.arc(palmX, palmY, handLen * 0.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // golden fingertip glow
-  for (const ti of FINGERTIPS) {
-    const x = X(landmarks[ti]), y = Y(landmarks[ti]);
-    const rg = ctx.createRadialGradient(x, y, 0, x, y, fw * 1.2);
-    rg.addColorStop(0, `rgba(255,220,100,${alpha * 0.95})`);
-    rg.addColorStop(1, `rgba(255,180,40,0)`);
-    ctx.fillStyle = rg;
-    ctx.beginPath();
-    ctx.arc(x, y, fw * 1.2, 0, Math.PI * 2);
-    ctx.fill();
+  // each finger: glow pass then bright stroke
+  for (const seq of FINGER_SEQS) {
+    // connect finger to palm base
+    const base = landmarks[seq[0] === 1 ? 0 : seq[0]];
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(X(landmarks[0]), Y(landmarks[0])); // wrist anchor
+      seq.forEach(i => ctx.lineTo(X(landmarks[i]), Y(landmarks[i])));
+    };
+    // glow
+    path();
+    ctx.lineWidth = fw * 2.2;
+    ctx.strokeStyle = `rgba(255,240,200,${alpha * 0.18})`;
+    ctx.stroke();
+    // body
+    path();
+    ctx.lineWidth = fw * 1.1;
+    ctx.strokeStyle = `rgba(255,248,228,${alpha * 0.55})`;
+    ctx.stroke();
+    // bright edge
+    path();
+    ctx.lineWidth = fw * 0.18;
+    ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.90})`;
+    ctx.stroke();
   }
 
-  // scattered sparkles
-  const now = performance.now();
-  for (let si = 0; si < SPARKLE_LMS.length; si++) {
-    const lm = landmarks[SPARKLE_LMS[si]];
-    const flicker = 0.4 + 0.6 * Math.abs(Math.sin(now * 0.0025 + si * 1.9));
-    _drawSparkle(ctx, X(lm), Y(lm), fw * 0.25 + flicker * fw * 0.35, alpha * flicker * 0.75);
+  // fingertip dots
+  for (const ti of FINGERTIPS) {
+    const x = X(landmarks[ti]), y = Y(landmarks[ti]);
+    ctx.fillStyle = `rgba(255,255,255,${alpha * 0.95})`;
+    ctx.beginPath();
+    ctx.arc(x, y, fw * 0.18, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
