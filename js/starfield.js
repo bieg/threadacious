@@ -14,25 +14,42 @@ const phases = new Float32Array(COUNT);
 let geometry, points;
 let geometry2, points2;
 
-function _makeStarTexture() {
-  const sz = 64;
-  const cv = document.createElement('canvas');
-  cv.width = sz; cv.height = sz;
-  const ctx = cv.getContext('2d');
-  const half = sz / 2;
-  const g = ctx.createRadialGradient(half, half, 0, half, half, half);
-  g.addColorStop(0,   'rgba(255,255,255,1)');
-  g.addColorStop(0.12,'rgba(220,238,255,0.9)');
-  g.addColorStop(0.40,'rgba(160,205,255,0.22)');
-  g.addColorStop(1.0, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, sz, sz);
-  return new THREE.CanvasTexture(cv);
+// Inline GLSL — draws a soft radial glow disc using gl_PointCoord.
+// Much more reliable than canvas textures (no asset loading, no alphaTest quirks).
+const _VERT = `
+  uniform float uSize;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    // sizeAttenuation: scale by depth so far stars are smaller
+    gl_PointSize = uSize / max(0.05, -mv.z / 10.0);
+    gl_Position  = projectionMatrix * mv;
+  }
+`;
+const _FRAG = `
+  uniform vec3 uColor;
+  void main() {
+    float d = length(gl_PointCoord - 0.5) * 2.0; // 0 centre → 1 edge
+    if (d > 1.0) discard;
+    float g = pow(1.0 - d, 2.4);                  // soft power-law glow
+    gl_FragColor = vec4(uColor * g, g);
+  }
+`;
+
+function _starMat(uSize, hex) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uSize:  { value: uSize },
+      uColor: { value: new THREE.Color(hex) },
+    },
+    vertexShader:   _VERT,
+    fragmentShader: _FRAG,
+    blending:    THREE.AdditiveBlending,
+    depthWrite:  false,
+    transparent: true,
+  });
 }
 
 export function initStarfield(scene) {
-  const tex = _makeStarTexture();
-
   for (let i = 0; i < COUNT; i++) {
     const i3 = i * 3;
     positions[i3]     = (Math.random() - 0.5) * BOUNDS;
@@ -44,35 +61,17 @@ export function initStarfield(scene) {
     phases[i] = Math.random() * Math.PI * 2;
   }
 
-  // main star layer — small, cool blue-white
+  // main layer — 1500 small cool blue-white glowing dots
   geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const material = new THREE.PointsMaterial({
-    size: 0.14,
-    map: tex,
-    color: 0xc8dcff,
-    blending: THREE.AdditiveBlending,
-    transparent: true,
-    depthWrite: false,
-    sizeAttenuation: true,
-  });
-  points = new THREE.Points(geometry, material);
+  points = new THREE.Points(geometry, _starMat(4.5, 0xc8dcff));
   scene.add(points);
 
-  // bright accent layer — larger, warm white, uses last 220 positions as a view
+  // accent layer — 220 larger warm stars for depth (shared buffer view)
   const accentBuf = new Float32Array(positions.buffer, (COUNT - 220) * 3 * 4, 220 * 3);
   geometry2 = new THREE.BufferGeometry();
   geometry2.setAttribute('position', new THREE.BufferAttribute(accentBuf, 3));
-  const material2 = new THREE.PointsMaterial({
-    size: 0.30,
-    map: tex,
-    color: 0xfff8ee,
-    blending: THREE.AdditiveBlending,
-    transparent: true,
-    depthWrite: false,
-    sizeAttenuation: true,
-  });
-  points2 = new THREE.Points(geometry2, material2);
+  points2 = new THREE.Points(geometry2, _starMat(9.0, 0xfff6e8));
   scene.add(points2);
 
   return points;

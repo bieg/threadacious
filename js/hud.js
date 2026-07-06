@@ -144,48 +144,29 @@ function _drawHand(ctx, landmarks, w, h, opacity = 1) {
   const X = lm => (1 - lm.x) * w;
   const Y = lm => lm.y * h;
 
-  // faint dots along each bone (replaces solid lines)
-  for (const [a, b] of HAND_CONNECTIONS) {
-    const ax = X(landmarks[a]), ay = Y(landmarks[a]);
-    const bx = X(landmarks[b]), by = Y(landmarks[b]);
-    const steps = 5;
-    for (let s = 1; s < steps; s++) {
-      const t = s / steps;
-      const mx = ax + (bx - ax) * t;
-      const my = ay + (by - ay) * t;
-      // stable jitter per bone+step
-      const jx = Math.sin(a * 7.3 + b * 3.1 + s * 11.7) * 1.8;
-      const jy = Math.cos(a * 5.9 + b * 9.3 + s *  7.1) * 1.8;
-      ctx.fillStyle = `rgba(200,220,255,${0.22 * opacity})`;
-      ctx.beginPath();
-      ctx.arc(mx + jx, my + jy, 1.1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // particle clusters at each joint
   for (let li = 0; li < landmarks.length; li++) {
     const lm = landmarks[li];
     const cx = X(lm), cy = Y(lm);
     const isFt = FINGERTIPS.includes(li);
 
     if (isFt) {
-      // golden radial glow halo
-      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
-      grd.addColorStop(0,   `rgba(255,225,100,${0.28 * opacity})`);
-      grd.addColorStop(0.5, `rgba(255,190,50,${0.10 * opacity})`);
+      // large golden glow halo at each fingertip
+      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 26);
+      grd.addColorStop(0,   `rgba(255,230,100,${0.40 * opacity})`);
+      grd.addColorStop(0.5, `rgba(255,195,50,${0.14 * opacity})`);
       grd.addColorStop(1,   'rgba(255,160,30,0)');
       ctx.fillStyle = grd;
       ctx.beginPath();
-      ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 26, 0, Math.PI * 2);
       ctx.fill();
     }
 
+    // particle cluster — no bone lines, just scattered dots
     for (const p of _LAND_PARTICLES[li]) {
       const alpha = p.a * opacity;
       ctx.fillStyle = isFt
-        ? `rgba(255,228,120,${alpha})`
-        : `rgba(210,228,255,${alpha * 0.75})`;
+        ? `rgba(255,232,120,${alpha})`
+        : `rgba(210,230,255,${alpha * 0.8})`;
       ctx.beginPath();
       ctx.arc(cx + p.dx, cy + p.dy, p.r, 0, Math.PI * 2);
       ctx.fill();
