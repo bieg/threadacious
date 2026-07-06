@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
-const COUNT = 600;
-const BOUNDS = 12;
+const COUNT = 1500;
+const BOUNDS = 22;
 const MAX_SPEED = 0.04;
 const GRAVITY_STRENGTH = 0.0006;
 const GRAVITY_RADIUS = 3.0;
@@ -12,33 +12,69 @@ const positions = new Float32Array(COUNT * 3);
 const velocities = new Float32Array(COUNT * 3);
 const phases = new Float32Array(COUNT);
 let geometry, points;
+let geometry2, points2;
+
+function _makeStarTexture() {
+  const sz = 64;
+  const cv = document.createElement('canvas');
+  cv.width = sz; cv.height = sz;
+  const ctx = cv.getContext('2d');
+  const half = sz / 2;
+  const g = ctx.createRadialGradient(half, half, 0, half, half, half);
+  g.addColorStop(0,   'rgba(255,255,255,1)');
+  g.addColorStop(0.12,'rgba(220,238,255,0.9)');
+  g.addColorStop(0.40,'rgba(160,205,255,0.22)');
+  g.addColorStop(1.0, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, sz, sz);
+  return new THREE.CanvasTexture(cv);
+}
 
 export function initStarfield(scene) {
+  const tex = _makeStarTexture();
+
   for (let i = 0; i < COUNT; i++) {
     const i3 = i * 3;
     positions[i3]     = (Math.random() - 0.5) * BOUNDS;
     positions[i3 + 1] = (Math.random() - 0.5) * BOUNDS;
-    positions[i3 + 2] = (Math.random() - 0.5) * 4;
+    positions[i3 + 2] = (Math.random() - 0.5) * 8;
     velocities[i3]     = (Math.random() - 0.5) * 0.002;
     velocities[i3 + 1] = (Math.random() - 0.5) * 0.002;
     velocities[i3 + 2] = 0;
     phases[i] = Math.random() * Math.PI * 2;
   }
 
+  // main star layer — small, cool blue-white
   geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
   const material = new THREE.PointsMaterial({
-    size: 0.09,
-    color: 0xffffff,
+    size: 0.14,
+    map: tex,
+    color: 0xc8dcff,
     blending: THREE.AdditiveBlending,
     transparent: true,
     depthWrite: false,
     sizeAttenuation: true,
   });
-
   points = new THREE.Points(geometry, material);
   scene.add(points);
+
+  // bright accent layer — larger, warm white, uses last 220 positions as a view
+  const accentBuf = new Float32Array(positions.buffer, (COUNT - 220) * 3 * 4, 220 * 3);
+  geometry2 = new THREE.BufferGeometry();
+  geometry2.setAttribute('position', new THREE.BufferAttribute(accentBuf, 3));
+  const material2 = new THREE.PointsMaterial({
+    size: 0.30,
+    map: tex,
+    color: 0xfff8ee,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+  points2 = new THREE.Points(geometry2, material2);
+  scene.add(points2);
+
   return points;
 }
 
@@ -97,6 +133,7 @@ export function updateStarfield(time, activeThreads) {
   }
 
   geometry.attributes.position.needsUpdate = true;
+  if (geometry2) geometry2.attributes.position.needsUpdate = true;
 }
 
 export function rotateImpulse(originWorld, direction = 1) {

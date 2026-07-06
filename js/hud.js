@@ -113,35 +113,83 @@ export function updateThreadCount(count) {
 
 const FINGERTIPS = [4, 8, 12, 16, 20];
 
-function _drawHand(ctx, landmarks, w, h) {
+// deterministic particle cloud offsets per landmark — computed once
+const _LAND_PARTICLES = (() => {
+  const out = [];
+  for (let li = 0; li < 21; li++) {
+    const isFt = FINGERTIPS.includes(li);
+    const n = isFt ? 18 : 9;
+    const maxR = isFt ? 13 : 7;
+    const arr = [];
+    for (let p = 0; p < n; p++) {
+      // deterministic angle/distance via integer hashing
+      const angle = (li * 41 + p * 17) * 0.613; // incommensurable with 2π
+      const frac  = ((li * 23 + p * 37 + 7) % 97) / 97;
+      const dist  = maxR * (0.15 + 0.85 * frac);
+      const sizeF = ((li * 7  + p * 13 + 3) % 10) / 10; // 0..1
+      const alphaF = ((li * 3  + p *  7 + 1) % 60) / 100; // 0..0.60
+      arr.push({
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist,
+        r:  0.7 + sizeF * 1.1,
+        a:  0.38 + alphaF,
+      });
+    }
+    out.push(arr);
+  }
+  return out;
+})();
+
+function _drawHand(ctx, landmarks, w, h, opacity = 1) {
   const X = lm => (1 - lm.x) * w;
   const Y = lm => lm.y * h;
 
-  // bones
-  ctx.beginPath();
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineCap = 'round';
+  // faint dots along each bone (replaces solid lines)
   for (const [a, b] of HAND_CONNECTIONS) {
-    ctx.moveTo(X(landmarks[a]), Y(landmarks[a]));
-    ctx.lineTo(X(landmarks[b]), Y(landmarks[b]));
+    const ax = X(landmarks[a]), ay = Y(landmarks[a]);
+    const bx = X(landmarks[b]), by = Y(landmarks[b]);
+    const steps = 5;
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps;
+      const mx = ax + (bx - ax) * t;
+      const my = ay + (by - ay) * t;
+      // stable jitter per bone+step
+      const jx = Math.sin(a * 7.3 + b * 3.1 + s * 11.7) * 1.8;
+      const jy = Math.cos(a * 5.9 + b * 9.3 + s *  7.1) * 1.8;
+      ctx.fillStyle = `rgba(200,220,255,${0.22 * opacity})`;
+      ctx.beginPath();
+      ctx.arc(mx + jx, my + jy, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
-  ctx.stroke();
 
-  // joint dots
-  ctx.fillStyle = 'rgba(255,255,255,0.90)';
-  for (const lm of landmarks) {
-    ctx.beginPath();
-    ctx.arc(X(lm), Y(lm), 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // particle clusters at each joint
+  for (let li = 0; li < landmarks.length; li++) {
+    const lm = landmarks[li];
+    const cx = X(lm), cy = Y(lm);
+    const isFt = FINGERTIPS.includes(li);
 
-  // fingertip dots slightly larger
-  ctx.fillStyle = 'rgba(255,220,100,0.95)';
-  for (const ti of FINGERTIPS) {
-    ctx.beginPath();
-    ctx.arc(X(landmarks[ti]), Y(landmarks[ti]), 4, 0, Math.PI * 2);
-    ctx.fill();
+    if (isFt) {
+      // golden radial glow halo
+      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
+      grd.addColorStop(0,   `rgba(255,225,100,${0.28 * opacity})`);
+      grd.addColorStop(0.5, `rgba(255,190,50,${0.10 * opacity})`);
+      grd.addColorStop(1,   'rgba(255,160,30,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (const p of _LAND_PARTICLES[li]) {
+      const alpha = p.a * opacity;
+      ctx.fillStyle = isFt
+        ? `rgba(255,228,120,${alpha})`
+        : `rgba(210,228,255,${alpha * 0.75})`;
+      ctx.beginPath();
+      ctx.arc(cx + p.dx, cy + p.dy, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 
@@ -192,7 +240,7 @@ export function drawSkeleton(handsResults, handInfos) {
       opacity = OPACITY_HOLD + (OPACITY_END - OPACITY_HOLD) * t;
     }
 
-    _drawHand(skeletonCtx, landmarks, w, h);
+    _drawHand(skeletonCtx, landmarks, w, h, opacity);
 
     // draw progress arcs for growing gestures
     if (info && info.present) {
