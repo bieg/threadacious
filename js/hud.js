@@ -113,62 +113,81 @@ export function updateThreadCount(count) {
 
 const FINGERTIPS = [4, 8, 12, 16, 20];
 
-// deterministic particle cloud offsets per landmark — computed once
-const _LAND_PARTICLES = (() => {
-  const out = [];
-  for (let li = 0; li < 21; li++) {
-    const isFt = FINGERTIPS.includes(li);
-    const n = isFt ? 18 : 9;
-    const maxR = isFt ? 13 : 7;
-    const arr = [];
-    for (let p = 0; p < n; p++) {
-      // deterministic angle/distance via integer hashing
-      const angle = (li * 41 + p * 17) * 0.613; // incommensurable with 2π
-      const frac  = ((li * 23 + p * 37 + 7) % 97) / 97;
-      const dist  = maxR * (0.15 + 0.85 * frac);
-      const sizeF = ((li * 7  + p * 13 + 3) % 10) / 10; // 0..1
-      const alphaF = ((li * 3  + p *  7 + 1) % 60) / 100; // 0..0.60
-      arr.push({
-        dx: Math.cos(angle) * dist,
-        dy: Math.sin(angle) * dist,
-        r:  0.7 + sizeF * 1.1,
-        a:  0.38 + alphaF,
-      });
-    }
-    out.push(arr);
-  }
-  return out;
-})();
+// Dense particle cloud — precomputed stable positions along bones + at joints.
+// ~30 particles per bone segment + clusters at joints = ~1000 pts per hand.
+
+const _BONE_PARTS = HAND_CONNECTIONS.map(([a, b], bi) => {
+  const N = 30;
+  return Array.from({ length: N }, (_, p) => ({
+    t:    ((bi * 37 + p * 13 + 3) % 97) / 97,          // position along bone
+    perp: (((bi * 17 + p * 41 + 7) % 200) / 200 - 0.5) * 8, // ±4px scatter
+    sz:   0.6 + ((bi * 7  + p * 11) % 8)  / 14,
+    al:   0.20 + ((bi * 3  + p *  7) % 60) / 160,
+  }));
+});
+
+const _JOINT_PARTS = Array.from({ length: 21 }, (_, li) => {
+  const ft = FINGERTIPS.includes(li);
+  const N = ft ? 42 : 18;
+  const R = ft ? 12 : 7;
+  return Array.from({ length: N }, (_, p) => {
+    const angle = (li * 41 + p * 17) * 0.6137;
+    const frac  = ((li * 23 + p * 37 + 7) % 97) / 97;
+    const dist  = R * (0.08 + 0.92 * frac);
+    return {
+      dx: Math.cos(angle) * dist,
+      dy: Math.sin(angle) * dist,
+      sz: 0.6 + ((li * 7 + p * 13) % 8) / 14,
+      al: 0.30 + ((li * 3 + p *  7) % 55) / 110,
+    };
+  });
+});
 
 function _drawHand(ctx, landmarks, w, h, opacity = 1) {
   const X = lm => (1 - lm.x) * w;
   const Y = lm => lm.y * h;
 
-  for (let li = 0; li < landmarks.length; li++) {
-    const lm = landmarks[li];
-    const cx = X(lm), cy = Y(lm);
-    const isFt = FINGERTIPS.includes(li);
+  // dense cloud along every bone
+  for (let bi = 0; bi < HAND_CONNECTIONS.length; bi++) {
+    const [a, b] = HAND_CONNECTIONS[bi];
+    const ax = X(landmarks[a]), ay = Y(landmarks[a]);
+    const bx = X(landmarks[b]), by = Y(landmarks[b]);
+    const edx = bx - ax, edy = by - ay;
+    const len = Math.sqrt(edx * edx + edy * edy) || 1;
+    const nx = -edy / len, ny = edx / len; // unit perpendicular
 
-    if (isFt) {
-      // large golden glow halo at each fingertip
-      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 26);
-      grd.addColorStop(0,   `rgba(255,230,100,${0.40 * opacity})`);
-      grd.addColorStop(0.5, `rgba(255,195,50,${0.14 * opacity})`);
-      grd.addColorStop(1,   'rgba(255,160,30,0)');
-      ctx.fillStyle = grd;
+    for (const p of _BONE_PARTS[bi]) {
+      ctx.fillStyle = `rgba(220,235,255,${p.al * opacity})`;
       ctx.beginPath();
-      ctx.arc(cx, cy, 26, 0, Math.PI * 2);
+      ctx.arc(ax + edx * p.t + nx * p.perp,
+              ay + edy * p.t + ny * p.perp,
+              p.sz, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // joint clusters + fingertip glow halos
+  for (let li = 0; li < 21; li++) {
+    const cx = X(landmarks[li]), cy = Y(landmarks[li]);
+    const ft = FINGERTIPS.includes(li);
+
+    if (ft) {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22);
+      g.addColorStop(0,   `rgba(255,242,160,${0.55 * opacity})`);
+      g.addColorStop(0.5, `rgba(255,215,80,${0.18 * opacity})`);
+      g.addColorStop(1,   'rgba(255,180,40,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 22, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // particle cluster — no bone lines, just scattered dots
-    for (const p of _LAND_PARTICLES[li]) {
-      const alpha = p.a * opacity;
-      ctx.fillStyle = isFt
-        ? `rgba(255,232,120,${alpha})`
-        : `rgba(210,230,255,${alpha * 0.8})`;
+    for (const p of _JOINT_PARTS[li]) {
+      ctx.fillStyle = ft
+        ? `rgba(255,244,165,${p.al * opacity})`
+        : `rgba(218,234,255,${p.al * 0.88 * opacity})`;
       ctx.beginPath();
-      ctx.arc(cx + p.dx, cy + p.dy, p.r, 0, Math.PI * 2);
+      ctx.arc(cx + p.dx, cy + p.dy, p.sz, 0, Math.PI * 2);
       ctx.fill();
     }
   }
