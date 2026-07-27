@@ -1,11 +1,13 @@
 import { initScene, render, getScene, mpToWorld } from './scene.js';
 import { initHands, detectHands, setOnGesture, getHandGrowingState, getHandInfo } from './hands.js';
 import * as hands from './hands.js';
-import { initStarfield, updateStarfield, crushImpulse, rotateImpulse } from './starfield.js';
+import { initStarfield, updateStarfield, crushImpulse, rotateImpulse, darkMoodBurst, lightMoodDrift } from './starfield.js';
 import { createThread, updateThreads, activeThreads, crushThreads } from './threads.js';
 import { initSolly, updateSolly, energizeSolly, setOnSollyTouch } from './solly.js';
 import { initAudio, resumeAudio, playGestureSound } from './audio.js';
 import { initHud, setGestureHint, updateThreadCount, drawSkeleton } from './hud.js';
+import { initSpeech, setOnMood } from './speech.js';
+import { initMood, triggerDark, triggerLight, updateMood, setMicActive } from './mood.js';
 
 const videoEl = document.getElementById('webcam');
 const startOverlay = document.getElementById('start-overlay');
@@ -18,6 +20,7 @@ const scene = getScene();
 initStarfield(scene);
 initSolly(scene);
 initHud();
+initMood();
 setOnSollyTouch(() => playGestureSound('solly-touch'));
 requestAnimationFrame(_preLoop);
 
@@ -26,6 +29,7 @@ function _preLoop(time) {
   requestAnimationFrame(_preLoop);
   updateStarfield(time, []);
   updateSolly(time, [], [], []);
+  updateMood();
   render();
 }
 _preLoop.running = true;
@@ -57,6 +61,10 @@ async function _start() {
   await initHands();
   setOnGesture(_handleGesture);
 
+  setOnMood(_handleMood);
+  const micOn = initSpeech();
+  setMicActive(micOn);
+
   _preLoop.running = false;
   startOverlay.style.display = 'none';
   requestAnimationFrame(_loop);
@@ -76,6 +84,19 @@ function _handleGesture(evt) {
   } else {
     setGestureHint(evt.type, 'confirmed');
     createThread(evt.type, evt.originPoint, evt.targetPoint, scene);
+  }
+}
+
+function _handleMood({ mood, word }) {
+  if (mood === 'dark') {
+    triggerDark(word);
+    darkMoodBurst();
+    energizeSolly(2.0);
+    playGestureSound('crush');
+  } else {
+    triggerLight(word);
+    lightMoodDrift();
+    energizeSolly(0.8);
   }
 }
 
@@ -107,6 +128,7 @@ function _loop(time) {
   updateStarfield(time, activeThreads);
   updateThreads(time);
   updateSolly(time, activeThreads, fingerPositions, palmPositions);
+  updateMood();
   updateThreadCount(activeThreads.length);
 
   const handInfos = [getHandInfo(0), getHandInfo(1)];
