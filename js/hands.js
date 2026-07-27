@@ -4,13 +4,13 @@ import { mpToWorld } from './scene.js';
 const FINGERS = ['structure', 'energy', 'gravity', 'ghost'];
 const TIPS    = [8, 12, 16, 20];
 
-const ARM_THRESHOLDS     = [1.4, 1.7, 2.0, 2.3];
-const RELEASE_THRESHOLDS = [1.1, 1.3, 1.6, 1.9];
+const ARM_THRESHOLDS     = [1.2, 1.45, 1.7, 1.95];
+const RELEASE_THRESHOLDS = [0.95, 1.1, 1.35, 1.6];
 const FIST_ARM     = 0.9;
 const FIST_RELEASE = 1.2;
-const FRAMES_REQUIRED = 5;
+const FRAMES_REQUIRED = 3;
 const COOLDOWN_MS = 400;
-const ALPHA = 0.3;
+const ALPHA = 0.45;
 const ROTATE_THRESHOLD = 1.1;   // ~63° of wrist rotation
 const ROTATE_WINDOW_MS = 600;
 const ROTATE_COOLDOWN_MS = 800;
